@@ -3,10 +3,34 @@ import re
 import time
 
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 METRICS_URL = os.environ["METRICS_URL"]
+PUSHOVER_APP_TOKEN = os.environ["PUSHOVER_APP_TOKEN"]
+PUSHOVER_USER_KEY = os.environ["PUSHOVER_USER_KEY"]
 
 client = httpx.Client()
+
+
+def send_notification(
+    message: str,
+):
+    data = {
+        "token": PUSHOVER_APP_TOKEN,
+        "user": PUSHOVER_USER_KEY,
+        "message": message,
+    }
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    client.post(
+        "https://api.pushover.net/1/messages.json",
+        headers=headers,
+        data=data,
+    )
+    return
 
 
 def get_last_executed_checkpoint() -> int:
@@ -22,7 +46,7 @@ def get_last_executed_checkpoint() -> int:
 def main():
     previous_checkpoint = None
     rounds = 3
-    interval = 1
+    interval = 5
 
     for round in range(1, rounds + 1):
         try:
@@ -30,10 +54,9 @@ def main():
             print(f"Round {round}: Checkpoint = {current_checkpoint}")
 
             if previous_checkpoint is not None:
-                assert (
-                    current_checkpoint > previous_checkpoint
-                ), f"Round {round}: Current checkpoint ({current_checkpoint}) is not higher than previous checkpoint ({previous_checkpoint})"
-                print(f"Assertion passed: {current_checkpoint} > {previous_checkpoint}")
+                if not current_checkpoint > previous_checkpoint:
+                    print("Sending alert!")
+                    send_notification(f"Validator is down: {METRICS_URL}")
 
             previous_checkpoint = current_checkpoint
 
@@ -43,6 +66,7 @@ def main():
 
         except Exception as e:
             print(f"Error in round {round}: {str(e)}")
+            send_notification(f"Validator is down: {METRICS_URL}")
             break
 
 
